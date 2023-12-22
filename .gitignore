@@ -1,0 +1,6 @@
+PictureViewComp/.vs
+PictureViewComp/Library*
+PictureViewComp/Logs/*
+PictureViewComp/XCode/*
+PictureViewComp/XCode_BurstDebugInformation_DoNotShip/*
+PictureViewComp/obj/*
