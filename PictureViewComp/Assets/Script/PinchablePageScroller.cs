@@ -10,6 +10,8 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     #region [CLASS MEMBERS]
     // Serialized Field --------------------------------------------------//
     //
+    [SerializeField] Canvas Canvas;
+    [SerializeField] Camera UICamera;
     [SerializeField] RectTransform ContentTransform;
     [SerializeField] List<RectTransform> TargetViews = new List<RectTransform>();
     [SerializeField] float TweenTime = 0.12f;
@@ -43,7 +45,7 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     float mMSDownTime;
     Vector2 mMSDownPos;
     bool mIsZoomMode = false;
-
+    Vector2 mVOrigin = Vector2.zero;
     #endregion
 
 
@@ -53,6 +55,13 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     // Start is called before the first frame update
     void Start()
     {
+        UnityEngine.Assertions.Assert.IsTrue(Canvas != null, "Canvas Can't be null!");
+        UnityEngine.Assertions.Assert.IsTrue(ContentTransform != null, "ContentTransform Can't be null!");
+
+
+        Camera uiCamera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : UICamera;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(Canvas.GetComponent<RectTransform>(), Vector2.zero, uiCamera, out mVOrigin);
+
 #if !UNITY_EDITOR
         if (ButtonScaleUp != null) ButtonScaleUp.SetActive(false);
         if (ButtonScaleDown != null) ButtonScaleDown.SetActive(false);
@@ -193,13 +202,14 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     }
     void UpdateDrag(PointerEventData eventData)
     {
-        Vector2 vOrizin = transform.InverseTransformPoint(Vector2.zero);
-        Vector2 vRet = transform.InverseTransformPoint(eventData.delta);
+        Vector2 vRet;
+        Camera uiCamera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : UICamera;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(Canvas.GetComponent<RectTransform>(), eventData.delta, uiCamera, out vRet);
 
         if (mIsZoomMode)
         {
-            float xOffset = vRet.x - vOrizin.x;
-            float yOffset = vRet.y - vOrizin.y;
+            float xOffset = vRet.x - mVOrigin.x;
+            float yOffset = vRet.y - mVOrigin.y;
             float xLimit = mContentWidth * mOriginalScale.x - TargetViews[PageIndex].rect.width * TargetViews[PageIndex].localScale.x * ContentTransform.localScale.x;
             float yLimit = mContentHeight * mOriginalScale.y - TargetViews[PageIndex].rect.height * TargetViews[PageIndex].localScale.y * ContentTransform.localScale.y;
 
@@ -210,7 +220,7 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
         }
         else
         {
-            ContentTransform.localPosition += new Vector3(vRet.x - vOrizin.x, .0f, .0f);
+            ContentTransform.localPosition += new Vector3(vRet.x - mVOrigin.x, .0f, .0f);
         }
         mMSPointInfos[0].vPos = eventData.position;
     }
