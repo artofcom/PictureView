@@ -16,7 +16,6 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     [SerializeField] List<RectTransform> TargetViews = new List<RectTransform>();
     [SerializeField] float TweenTime = 0.12f;
     [SerializeField] float QuickDragDuration = 0.3f;
-    [SerializeField] GameObject ButtonScaleUp, ButtonScaleDown;
     [SerializeField] float DesignedCanvasWidth = 800.0f;
     [SerializeField] public int PageIndex = 0;
     [SerializeField] bool FitToScreen = false;
@@ -49,7 +48,6 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     #endregion
 
 
-
     #region [MONO_EVENTS]
 
     // Start is called before the first frame update
@@ -61,11 +59,6 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
 
         Camera uiCamera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : UICamera;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(Canvas.GetComponent<RectTransform>(), Vector2.zero, uiCamera, out mVOrigin);
-
-#if !UNITY_EDITOR
-        if (ButtonScaleUp != null) ButtonScaleUp.SetActive(false);
-        if (ButtonScaleDown != null) ButtonScaleDown.SetActive(false);
-#endif
     }
     #endregion
 
@@ -103,7 +96,6 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
         mIsZoomMode = false;
 
 
-
         JumpToPage(PageIndex, true);
 
         if (FitToScreen)
@@ -123,19 +115,27 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
 
         void OnFinishedJumpToPage()
         {
+            int oldPage = PageIndex;
             PageIndex = idxLandPage;
             // Make sure scaling need to be pivoted onto the object at the page.
             float wDiff = mPageMargin / mContentWidth;
             ContentTransform.GetComponent<RectTransform>().pivot = new Vector2(idxLandPage + 0.5f + PageIndex * wDiff, 0.5f);
             ContentTransform.localPosition = Vector2.zero;
 
-            OnPageChangeEnded?.Invoke(PageIndex);
+            if(oldPage != PageIndex)
+                OnPageChangeEnded?.Invoke(PageIndex);
         }
 
         if (instantJump)
             OnFinishedJumpToPage();
         else
             StartCoroutine(coMoveTo(ContentTransform, new Vector2(fLandPos, .0f), TweenTime, OnFinishedJumpToPage));
+    }
+    public void JumpToHome()
+    {
+        ContentTransform.localScale = mOriginalScale;
+        ExitZoomMode();
+        JumpToPage(0);
     }
     public void Clear()
     {
@@ -308,31 +308,22 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     #endregion
 
 
-    #region [EDITOR ONLY]
-
-    public void OnHomeClicked()
+    #region [EDITOR TESTING ONLY]
+    public void ScaleWithPinch(float fRate)
     {
-        ContentTransform.localScale = mOriginalScale;
-        ExitZoomMode();
-
-        JumpToPage(0);
-    }
-    public void OnScaleUpClicked()
-    {
-        float fRate = 1.1f;
         ContentTransform.localScale *= fRate;
-        EnterZoomMode(isEditorMode: true);
-    }
-    public void OnScaleDownClicked()
-    {
-        float fRate = 0.95f;
-        ContentTransform.localScale *= fRate;
+        if (fRate >= 1.0f)
+        {
+            EnterZoomMode(isEditorMode: true);
+        }
+        else
+        {
+            Vector2 vCurScale = ContentTransform.localScale;
+            float fDiff = vCurScale.magnitude - mOriginalScale.magnitude;
 
-        Vector2 vCurScale = ContentTransform.localScale;
-        float fDiff = vCurScale.magnitude - mOriginalScale.magnitude;
-
-        if (fDiff < .0f)
-            ExitZoomMode();
+            if (fDiff < .0f)
+                ExitZoomMode();
+        }
     }
     #endregion
 
@@ -343,11 +334,9 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     //
     int FindPointInfoIndex(int id)
     {
-        for (int k = 0; k < mMSPointInfos.Count; ++k)
-        {
-            if (mMSPointInfos[k].ID == id)
-                return k;
-        }
+        int idxRet = mMSPointInfos.FindIndex(x => x.ID == id);
+        if (idxRet >= 0 && idxRet < mMSPointInfos.Count)
+            return idxRet;
         return -1;
     }
 
@@ -367,7 +356,6 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
         PointInfo info = new PointInfo();
         info.ID = id;
         info.vPos = vPos;
-
         mMSPointInfos.Add(info);
     }
 

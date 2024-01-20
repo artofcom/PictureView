@@ -13,7 +13,7 @@ public class SampleScene02 : MonoBehaviour
 #if !UNITY_EDITOR
         Application.targetFrameRate = 60;
 #endif
-
+        // Dynamic Target Adding.
         if (ListItems != null && PPScroller != null)
         {
             for (int k = 0; k < ListItems.Count; ++k)
@@ -25,5 +25,24 @@ public class SampleScene02 : MonoBehaviour
             }
             PPScroller.Trigger();
         }
+    }
+
+
+    public void OnHomeClicked()
+    {
+        if (PPScroller != null)
+            PPScroller.JumpToHome();
+    }
+    public void OnScaleUpClicked()
+    {
+        float fRate = 1.1f;
+        if (PPScroller != null)
+            PPScroller.ScaleWithPinch(fRate);
+    }
+    public void OnScaleDownClicked()
+    {
+        float fRate = 0.95f;
+        if (PPScroller != null)
+            PPScroller.ScaleWithPinch(fRate);
     }
 }

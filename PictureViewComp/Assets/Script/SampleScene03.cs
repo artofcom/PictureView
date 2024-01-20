@@ -16,4 +16,23 @@ public class SampleScene03 : MonoBehaviour
         if (PPScroller != null)
             PPScroller.Trigger();
     }
+
+
+    public void OnHomeClicked()
+    {
+        if (PPScroller != null)
+            PPScroller.JumpToHome();
+    }
+    public void OnScaleUpClicked()
+    {
+        float fRate = 1.1f;
+        if (PPScroller != null)
+            PPScroller.ScaleWithPinch(fRate);
+    }
+    public void OnScaleDownClicked()
+    {
+        float fRate = 0.95f;
+        if (PPScroller != null)
+            PPScroller.ScaleWithPinch(fRate);
+    }
 }
