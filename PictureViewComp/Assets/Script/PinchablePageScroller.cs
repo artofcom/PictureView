@@ -39,12 +39,18 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     List<PointInfo> mMSPointInfos = new List<PointInfo>();
     float mZoomStartPointsDist;
     Vector3 mZoomStartScale;
-    Vector2 mOriginalScale;
+    List<Vector2> mOriginalScales = new List<Vector2>();
+    List<Vector2> mOriginalLocs = new List<Vector2>();
     float mPageMargin;
     float mMSDownTime;
     Vector2 mMSDownPos;
     bool mIsZoomMode = false;
     Vector2 mVOrigin = Vector2.zero;
+    GameObject mScaleRoot;
+    bool mIsTransitioning = false;
+
+    float PAGE_ORIGIN_X(int IndexPage) => -IndexPage * (mContentWidth + mPageMargin);
+
     #endregion
 
 
@@ -86,13 +92,17 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
         ContentTransform.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
         ContentTransform.localPosition = Vector2.zero;
 
+        mOriginalLocs.Clear();
+        mOriginalScales.Clear();
         mPageMargin = DesignedCanvasWidth - mContentWidth;
         for (int k = 0; k < TargetViews.Count; ++k)
         {
             TargetViews[k].localPosition = vPos;
             vPos = new Vector2(vPos.x + mContentWidth + mPageMargin, vPos.y);
+            mOriginalScales.Add(TargetViews[k].localScale);
+            mOriginalLocs.Add(TargetViews[k].localPosition);
         }
-        mOriginalScale = ContentTransform.localScale;
+       
         mIsZoomMode = false;
 
 
@@ -104,36 +114,31 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
             {
                 float fRate = ((float)mContentWidth) / ((float)TargetViews[k].rect.width);
                 TargetViews[k].localScale *= fRate;
+                mOriginalScales[k] = TargetViews[k].localScale;
             }
         }
     }
     public void JumpToPage(int idxLandPage, bool instantJump = false)
     {
         idxLandPage = Math.Clamp(idxLandPage, 0, TargetViews.Count - 1);
-        int diff = PageIndex - idxLandPage;
-        float fLandPos = diff * mContentWidth;
 
         void OnFinishedJumpToPage()
         {
             int oldPage = PageIndex;
             PageIndex = idxLandPage;
-            // Make sure scaling need to be pivoted onto the object at the page.
-            float wDiff = mPageMargin / mContentWidth;
-            ContentTransform.GetComponent<RectTransform>().pivot = new Vector2(idxLandPage + 0.5f + PageIndex * wDiff, 0.5f);
-            ContentTransform.localPosition = Vector2.zero;
+            ContentTransform.localPosition = new Vector2(PAGE_ORIGIN_X(PageIndex), .0f);
 
-            if(oldPage != PageIndex)
+            if (oldPage != PageIndex)
                 OnPageChangeEnded?.Invoke(PageIndex);
         }
 
         if (instantJump)
             OnFinishedJumpToPage();
         else
-            StartCoroutine(coMoveTo(ContentTransform, new Vector2(fLandPos, .0f), TweenTime, OnFinishedJumpToPage));
+            StartCoroutine(coMoveTo(ContentTransform, new Vector2(PAGE_ORIGIN_X(idxLandPage), .0f), TweenTime, OnFinishedJumpToPage));
     }
     public void JumpToHome()
     {
-        ContentTransform.localScale = mOriginalScale;
         ExitZoomMode();
         JumpToPage(0);
     }
@@ -167,22 +172,36 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
         mMSDownPos = eventData.position;
 
         if (mMSPointInfos.Count == 2)
-            EnterZoomMode();
+        {
+            StartZoom(isEditorMode : false);
+            if(!mIsZoomMode)
+                EnterZoomMode();
+        }
     }
 
     public void OnPointerUp(PointerEventData eventData)
     {
         RemovePointInfo(eventData.pointerId);
 
-        if (mMSPointInfos.Count == 0)
+        if (mIsZoomMode)
         {
-            Vector2 vCurScale = ContentTransform.localScale;
-            float fDiff = vCurScale.magnitude - mOriginalScale.magnitude;
-            if (Mathf.Abs(fDiff) < 0.01f)
-                LandToNearestPage(eventData.position.x);
+            if (mScaleRoot != null)
+            {
+                Vector2 vCurScale = new Vector2(mScaleRoot.transform.localScale.x * TargetViews[PageIndex].localScale.x,
+                                                mScaleRoot.transform.localScale.y * TargetViews[PageIndex].localScale.y);
 
-            else if (fDiff < .0f)
-                ExitZoomMode();
+                float fDiff = vCurScale.magnitude - mOriginalScales[PageIndex].magnitude;
+                if (fDiff < .0f)
+                    ExitZoomMode();
+
+
+                EndZoom();
+            }
+        }
+        else
+        {
+            if(!mIsTransitioning)
+                LandToNearestPage(eventData.position.x);
         }
     }
     #endregion
@@ -193,9 +212,10 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     // search land pos.
     int FindLandPage(float curPosX)
     {
-        if (curPosX < -mContentWidth * 0.5f)
+        float pageBasedPosX = curPosX - PAGE_ORIGIN_X(PageIndex);
+        if (pageBasedPosX < -mContentWidth * 0.5f)
             return PageIndex + 1;
-        else if (curPosX >= -mContentWidth * 0.5f && curPosX < mContentWidth * 0.5f)
+        else if (pageBasedPosX >= -mContentWidth * 0.5f && pageBasedPosX < mContentWidth * 0.5f)
             return PageIndex;
         else
             return PageIndex - 1;
@@ -208,15 +228,17 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
 
         if (mIsZoomMode)
         {
+            float xLimit = ContentTransform.rect.width - TargetViews[PageIndex].rect.width * TargetViews[PageIndex].localScale.x;
+            float yLimit = ContentTransform.rect.height - TargetViews[PageIndex].rect.height * TargetViews[PageIndex].localScale.y;
+
+            float pageX = (ContentTransform.rect.width + mPageMargin) * PageIndex;
+
             float xOffset = vRet.x - mVOrigin.x;
             float yOffset = vRet.y - mVOrigin.y;
-            float xLimit = mContentWidth * mOriginalScale.x - TargetViews[PageIndex].rect.width * TargetViews[PageIndex].localScale.x * ContentTransform.localScale.x;
-            float yLimit = mContentHeight * mOriginalScale.y - TargetViews[PageIndex].rect.height * TargetViews[PageIndex].localScale.y * ContentTransform.localScale.y;
+            float xPos = Mathf.Clamp(TargetViews[PageIndex].localPosition.x + xOffset, -Math.Abs(xLimit) * 0.5f + pageX, Math.Abs(xLimit) * 0.5f + pageX);
+            float yPos = Mathf.Clamp(TargetViews[PageIndex].localPosition.y + yOffset, -Math.Abs(yLimit) * 0.5f, Math.Abs(yLimit) * 0.5f);
 
-            float xPos = Mathf.Clamp(ContentTransform.localPosition.x + xOffset, -Math.Abs(xLimit) * 0.5f, Math.Abs(xLimit) * 0.5f);
-            float yPos = Mathf.Clamp(ContentTransform.localPosition.y + yOffset, -Math.Abs(yLimit) * 0.5f, Math.Abs(yLimit) * 0.5f);
-
-            ContentTransform.localPosition = new Vector3(xPos, yPos, ContentTransform.localPosition.z);
+            TargetViews[PageIndex].localPosition = new Vector3(xPos, yPos, TargetViews[PageIndex].localPosition.z);
         }
         else
         {
@@ -236,7 +258,9 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
 
             float curLength = (mMSPointInfos[0].vPos - mMSPointInfos[1].vPos).magnitude;
             float fRate = curLength / mZoomStartPointsDist;
-            ContentTransform.localScale = mZoomStartScale * fRate;
+            mScaleRoot.transform.localScale = mZoomStartScale * fRate;
+
+            Debug.Log($"Cur ScaleRoot scale : {mScaleRoot.transform.localScale.x}, {mScaleRoot.transform.localScale.y} ");
         }
     }
     void LandToNearestPage(float MSXPos)
@@ -249,35 +273,80 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
         int idxLandPage = FindLandPage(ContentTransform.localPosition.x + fQuickDragPoint);
         JumpToPage(idxLandPage);
     }
+    void StartZoom(bool isEditorMode)
+    {
+        Vector2 vRet;
+        Camera uiCamera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : UICamera;
+
+        if (isEditorMode)
+        {
+            vRet = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(TargetViews[PageIndex].parent.GetComponent<RectTransform>(), vRet, uiCamera, out vRet);
+
+            if (mScaleRoot != null)
+                Destroy(mScaleRoot);
+
+            mScaleRoot = new GameObject();
+            mScaleRoot.transform.SetParent(ContentTransform, false);
+            mScaleRoot.transform.localPosition = new Vector3(vRet.x, vRet.y, .0f);
+            TargetViews[PageIndex].SetParent(mScaleRoot.transform, true);
+        }
+        else
+        {
+            vRet = Vector2.Lerp(mMSPointInfos[0].vPos, mMSPointInfos[1].vPos, 0.5f);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(TargetViews[PageIndex].parent.GetComponent<RectTransform>(), vRet, uiCamera, out vRet);
+
+            if (mScaleRoot != null)
+                Destroy(mScaleRoot);
+
+            mScaleRoot = new GameObject();
+            mScaleRoot.transform.SetParent(ContentTransform, false);
+            mScaleRoot.transform.localPosition = new Vector3(vRet.x, vRet.y, .0f);
+            TargetViews[PageIndex].SetParent(mScaleRoot.transform, true);
+
+            mZoomStartPointsDist = (mMSPointInfos[0].vPos - mMSPointInfos[1].vPos).magnitude;
+            mZoomStartScale = mScaleRoot.transform.localScale;
+        }
+    }
+    void EndZoom()
+    {
+        TargetViews[PageIndex].SetParent(ContentTransform, true);
+        GameObject.Destroy(mScaleRoot);
+        mScaleRoot = null;
+    }
+
     void EnterZoomMode(bool isEditorMode = false)
     {
-        mIsZoomMode = true;
+        if (mIsZoomMode) return;
 
-        if (!isEditorMode)
-        {
-            mZoomStartPointsDist = (mMSPointInfos[0].vPos - mMSPointInfos[1].vPos).magnitude;
-            mZoomStartScale = ContentTransform.localScale;
-        }
         for (int k = 0; k < TargetViews.Count; ++k)
             TargetViews[k].gameObject.SetActive(k == PageIndex);
+
+        mIsZoomMode = true;
+
     }
     void ExitZoomMode()
     {
         mIsZoomMode = false;
 
-        StartCoroutine(coScaleTo(ContentTransform, mOriginalScale, TweenTime));
-        StartCoroutine(coMoveTo(ContentTransform, Vector2.zero, TweenTime, () =>
+        for (int k = 0; k < TargetViews.Count; ++k)
+            TargetViews[k].gameObject.SetActive(true);
+
+        mIsTransitioning = true;
+
+        StartCoroutine(coActionWithDelay(0.05f, () =>
         {
-            for (int k = 0; k < TargetViews.Count; ++k)
-                TargetViews[k].gameObject.SetActive(true);
-        }));
+            StartCoroutine(coScaleTo(TargetViews[PageIndex], mOriginalScales[PageIndex], TweenTime));
+            StartCoroutine(coMoveTo(TargetViews[PageIndex], mOriginalLocs[PageIndex], TweenTime, () => mIsTransitioning = false ));
+
+        }) );
     }
     #endregion
 
 
     #region [TWEENERS]
 
-    IEnumerator coMoveTo(Transform trMoveTarget, Vector2 vTo, float duration, Action callbackFinish)
+    IEnumerator coMoveTo(Transform trMoveTarget, Vector2 vTo, float duration, Action callbackFinish = null)
     {
         float fStartTime = Time.time;
         Vector2 vStart = trMoveTarget.localPosition;
@@ -304,6 +373,13 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
         }
         trScaleTarget.localScale = vTo;
     }
+    IEnumerator coActionWithDelay(float delay, Action action)
+    {
+        if(delay > .0f)
+            yield return new WaitForSeconds(delay);
+
+        action.Invoke();
+    }
 
     #endregion
 
@@ -311,19 +387,28 @@ public class PinchablePageScroller : MonoBehaviour, IDragHandler, IPointerDownHa
     #region [EDITOR TESTING ONLY]
     public void ScaleWithPinch(float fRate)
     {
-        ContentTransform.localScale *= fRate;
+#if UNITY_EDITOR
+
+        StartZoom(true);
+
+        mScaleRoot.transform.localScale *= fRate;
+
         if (fRate >= 1.0f)
         {
-            EnterZoomMode(isEditorMode: true);
+            if(!mIsZoomMode)
+                EnterZoomMode(isEditorMode: true);
         }
         else
         {
-            Vector2 vCurScale = ContentTransform.localScale;
-            float fDiff = vCurScale.magnitude - mOriginalScale.magnitude;
+            Vector2 vCurScale = fRate * TargetViews[PageIndex].localScale;
+            float fDiff = vCurScale.magnitude - mOriginalScales[PageIndex].magnitude;
 
             if (fDiff < .0f)
                 ExitZoomMode();
         }
+
+        EndZoom();
+#endif
     }
     #endregion
 
