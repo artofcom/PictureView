@@ -20,7 +20,8 @@ namespace UI.Scroller
         [SerializeField] float QuickDragDuration = 0.3f;
         [SerializeField] float DesignedCanvasWidth = 800.0f;
         [SerializeField] public int PageIndex = 0;
-        [SerializeField] bool FitToScreen = false;
+        [SerializeField] RectTransform FitTargetTransform = null;
+        [SerializeField] float Margine = 0;
 
 
         public UnityEvent<int> OnPageChangeEnded;
@@ -50,7 +51,7 @@ namespace UI.Scroller
         Vector2 mVOrigin = Vector2.zero;
         GameObject mScaleRoot;
         bool mIsTransitioning = false;
-
+        bool mIsPortraitMode = true;
         float PAGE_ORIGIN_X(int IndexPage) => -IndexPage * (mContentWidth + mPageMargin);
 
         #endregion
@@ -64,6 +65,7 @@ namespace UI.Scroller
             UnityEngine.Assertions.Assert.IsTrue(Canvas != null, "Canvas Can't be null!");
             UnityEngine.Assertions.Assert.IsTrue(ContentTransform != null, "ContentTransform Can't be null!");
 
+            mIsPortraitMode = Screen.width < Screen.height;
 
             Camera uiCamera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : UICamera;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(Canvas.GetComponent<RectTransform>(), Vector2.zero, uiCamera, out mVOrigin);
@@ -96,7 +98,7 @@ namespace UI.Scroller
 
             mOriginalLocs.Clear();
             mOriginalScales.Clear();
-            mPageMargin = DesignedCanvasWidth - mContentWidth;
+            mPageMargin = Margine;// DesignedCanvasWidth - mContentWidth;
             for (int k = 0; k < TargetViews.Count; ++k)
             {
                 TargetViews[k].localPosition = vPos;
@@ -110,11 +112,16 @@ namespace UI.Scroller
 
             JumpToPage(PageIndex, true);
 
-            if (FitToScreen)
+            if (FitTargetTransform != null)
             {
+                float screenRatio = ((float)Screen.width) / ((float)Screen.height);
                 for (int k = 0; k < TargetViews.Count; ++k)
                 {
-                    float fRate = ((float)mContentWidth) / ((float)TargetViews[k].rect.width);
+                    float viewRatio = ((float)TargetViews[k].rect.width) / ((float)TargetViews[k].rect.height);
+
+                    float fRate = screenRatio < viewRatio ?
+                        ((float)FitTargetTransform.rect.width) / ((float)TargetViews[k].rect.width) :
+                        ((float)FitTargetTransform.rect.height) / ((float)TargetViews[k].rect.height);
                     TargetViews[k].localScale *= fRate;
                     mOriginalScales[k] = TargetViews[k].localScale;
                 }

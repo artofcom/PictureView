@@ -668,6 +668,11 @@ MonoBehaviour:
   - {fileID: 7009120241004278364, guid: f55b1aeebad2241f287f96dc162579f2, type: 3}
   BtnScaleUp: {fileID: 617949856}
   BtnScaleDown: {fileID: 617949855}
+--- !u!224 &1571783390 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 9186665237512303037, guid: 10b3bc5e11a144f1b9bb9f2f364f6aa7, type: 3}
+  m_PrefabInstance: {fileID: 8094763927420187802}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1733622107
 GameObject:
   m_ObjectHideFlags: 0
@@ -875,6 +880,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: CursorDisplayer
       objectReference: {fileID: 0}
+    - target: {fileID: 8969377545463488662, guid: 9308831bb038641dfafec419727a9c3e, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -977,9 +986,29 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1733622110}
     - target: {fileID: 8042382635688381689, guid: 10b3bc5e11a144f1b9bb9f2f364f6aa7, type: 3}
+      propertyPath: Margine
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8042382635688381689, guid: 10b3bc5e11a144f1b9bb9f2f364f6aa7, type: 3}
       propertyPath: UICamera
       value: 
       objectReference: {fileID: 519420031}
+    - target: {fileID: 8042382635688381689, guid: 10b3bc5e11a144f1b9bb9f2f364f6aa7, type: 3}
+      propertyPath: FitToScreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8042382635688381689, guid: 10b3bc5e11a144f1b9bb9f2f364f6aa7, type: 3}
+      propertyPath: FitTargetTransform
+      value: 
+      objectReference: {fileID: 1571783390}
+    - target: {fileID: 8312664979612303447, guid: 10b3bc5e11a144f1b9bb9f2f364f6aa7, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 900
+      objectReference: {fileID: 0}
+    - target: {fileID: 9186665237512303037, guid: 10b3bc5e11a144f1b9bb9f2f364f6aa7, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 900
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
