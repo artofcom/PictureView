@@ -18,10 +18,8 @@ namespace UI.Scroller
         [SerializeField] List<RectTransform> TargetViews = new List<RectTransform>();
         [SerializeField] float TweenTime = 0.12f;
         [SerializeField] float QuickDragDuration = 0.3f;
-        [SerializeField] float DesignedCanvasWidth = 800.0f;
         [SerializeField] public int PageIndex = 0;
         [SerializeField] RectTransform FitTargetTransform = null;
-        [SerializeField] float Margine = 0;
 
 
         public UnityEvent<int> OnPageChangeEnded;
@@ -37,22 +35,19 @@ namespace UI.Scroller
 
         // member values --------------------------------------------------//
         //
-        float mContentWidth = 800.0f;
-        float mContentHeight = 1055.0f;
+        float mPageWidth = 0.0f;
         List<PointInfo> mMSPointInfos = new List<PointInfo>();
         float mZoomStartPointsDist;
         Vector3 mZoomStartScale;
         List<Vector2> mOriginalScales = new List<Vector2>();
         List<Vector2> mOriginalLocs = new List<Vector2>();
-        float mPageMargin;
         float mMSDownTime;
         Vector2 mMSDownPos;
         bool mIsZoomMode = false;
         Vector2 mVOrigin = Vector2.zero;
         GameObject mScaleRoot;
         bool mIsTransitioning = false;
-        bool mIsPortraitMode = true;
-        float PAGE_ORIGIN_X(int IndexPage) => -IndexPage * (mContentWidth + mPageMargin);
+        float PAGE_ORIGIN_X(int IndexPage) => -IndexPage * mPageWidth;
 
         #endregion
 
@@ -64,8 +59,6 @@ namespace UI.Scroller
         {
             UnityEngine.Assertions.Assert.IsTrue(Canvas != null, "Canvas Can't be null!");
             UnityEngine.Assertions.Assert.IsTrue(ContentTransform != null, "ContentTransform Can't be null!");
-
-            mIsPortraitMode = Screen.width < Screen.height;
 
             Camera uiCamera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : UICamera;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(Canvas.GetComponent<RectTransform>(), Vector2.zero, uiCamera, out mVOrigin);
@@ -89,8 +82,12 @@ namespace UI.Scroller
         public void Trigger(int idxStart = 0)
         {
             PageIndex = Math.Clamp(idxStart, 0, TargetViews.Count - 1);
-            mContentWidth = ContentTransform.rect.width;
-            mContentHeight = ContentTransform.rect.height;
+
+            Vector2 vScreenSize = new Vector2(Screen.width, Screen.height);
+            Camera uiCamera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : UICamera;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(Canvas.GetComponent<RectTransform>(), vScreenSize, uiCamera, out vScreenSize);
+            mPageWidth = 2.0f * vScreenSize.x;
+
             Vector2 vPos = Vector2.zero;
 
             ContentTransform.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
@@ -98,11 +95,10 @@ namespace UI.Scroller
 
             mOriginalLocs.Clear();
             mOriginalScales.Clear();
-            mPageMargin = Margine;// DesignedCanvasWidth - mContentWidth;
             for (int k = 0; k < TargetViews.Count; ++k)
             {
                 TargetViews[k].localPosition = vPos;
-                vPos = new Vector2(vPos.x + mContentWidth + mPageMargin, vPos.y);
+                vPos = new Vector2(vPos.x + mPageWidth, vPos.y);
                 mOriginalScales.Add(TargetViews[k].localScale);
                 mOriginalLocs.Add(TargetViews[k].localPosition);
             }
@@ -127,6 +123,10 @@ namespace UI.Scroller
                 }
             }
         }
+        public void Reset()
+        {
+            TargetViews.Clear();
+        }
         public void JumpToPage(int idxLandPage, bool instantJump = false)
         {
             idxLandPage = Math.Clamp(idxLandPage, 0, TargetViews.Count - 1);
@@ -150,10 +150,6 @@ namespace UI.Scroller
         {
             ExitZoomMode();
             JumpToPage(0);
-        }
-        public void Clear()
-        {
-            TargetViews.Clear();
         }
         #endregion
 
@@ -222,9 +218,9 @@ namespace UI.Scroller
         int FindLandPage(float curPosX)
         {
             float pageBasedPosX = curPosX - PAGE_ORIGIN_X(PageIndex);
-            if (pageBasedPosX < -mContentWidth * 0.5f)
+            if (pageBasedPosX < -mPageWidth * 0.5f)
                 return PageIndex + 1;
-            else if (pageBasedPosX >= -mContentWidth * 0.5f && pageBasedPosX < mContentWidth * 0.5f)
+            else if (pageBasedPosX >= -mPageWidth * 0.5f && pageBasedPosX < mPageWidth * 0.5f)
                 return PageIndex;
             else
                 return PageIndex - 1;
@@ -240,8 +236,7 @@ namespace UI.Scroller
                 float xLimit = ContentTransform.rect.width - TargetViews[PageIndex].rect.width * TargetViews[PageIndex].localScale.x;
                 float yLimit = ContentTransform.rect.height - TargetViews[PageIndex].rect.height * TargetViews[PageIndex].localScale.y;
 
-                float pageX = (ContentTransform.rect.width + mPageMargin) * PageIndex;
-
+                float pageX = mPageWidth * PageIndex;
                 float xOffset = vRet.x - mVOrigin.x;
                 float yOffset = vRet.y - mVOrigin.y;
                 float xPos = Mathf.Clamp(TargetViews[PageIndex].localPosition.x + xOffset, -Math.Abs(xLimit) * 0.5f + pageX, Math.Abs(xLimit) * 0.5f + pageX);
@@ -278,7 +273,7 @@ namespace UI.Scroller
             float fDir = mMSDownPos.x - MSXPos < .0f ? 1.0f : -1.0f;
             float fQuickDragPoint = .0f;
             if (Time.time - mMSDownTime < QuickDragDuration)
-                fQuickDragPoint = fDir * mContentWidth * 0.5f;
+                fQuickDragPoint = fDir * mPageWidth * 0.5f;
 
             int idxLandPage = FindLandPage(ContentTransform.localPosition.x + fQuickDragPoint);
             JumpToPage(idxLandPage);
